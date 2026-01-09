@@ -1,0 +1,169 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get repository name
+        id: repo
+        run: |
+          REPO_NAME="${{ github.event.repository.name }}"
+          echo "name=$REPO_NAME" >> $GITHUB_OUTPUT
+
+      - name: Extract experiment name from branch
+        id: extract
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+          if [[ "$BRANCH" == "main" ]]; then
+            # Main branch deploys to root with repo name as base
+            echo "experiment_name=" >> $GITHUB_OUTPUT
+            echo "base_path=/${{ steps.repo.outputs.name }}" >> $GITHUB_OUTPUT
+            echo "deploy_dir=." >> $GITHUB_OUTPUT
+            echo "is_main=true" >> $GITHUB_OUTPUT
+          else
+            # Extract name from claude/name-sessionId pattern
+            # Remove 'claude/' prefix and the session ID suffix (last hyphen + alphanumeric)
+            NAME=$(echo "$BRANCH" | sed 's|^claude/||' | sed 's|-[a-zA-Z0-9]*$||')
+            echo "experiment_name=$NAME" >> $GITHUB_OUTPUT
+            echo "base_path=/${{ steps.repo.outputs.name }}/$NAME" >> $GITHUB_OUTPUT
+            echo "deploy_dir=$NAME" >> $GITHUB_OUTPUT
+            echo "is_main=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Next.js app
+        run: npm run build
+        env:
+          NEXT_PUBLIC_BASE_PATH: ${{ steps.extract.outputs.base_path }}
+
+      - name: Fetch gh-pages branch
+        run: |
+          git fetch origin gh-pages:gh-pages || echo "gh-pages branch doesn't exist yet"
+
+      - name: Prepare deployment directory
+        run: |
+          mkdir -p deploy
+
+          # Try to get existing gh-pages content
+          if git show gh-pages:. > /dev/null 2>&1; then
+            git archive gh-pages | tar -x -C deploy
+          fi
+
+          # Add .nojekyll
+          touch deploy/.nojekyll
+
+      - name: Deploy main branch (root)
+        if: steps.extract.outputs.is_main == 'true'
+        run: |
+          # Save existing experiment directories
+          mkdir -p temp-save
+          for dir in deploy/*/; do
+            if [ -d "$dir" ]; then
+              dirname=$(basename "$dir")
+              cp -r "$dir" "temp-save/$dirname"
+            fi
+          done
+
+          # Save manifest
+          if [ -f deploy/manifest.json ]; then
+            cp deploy/manifest.json temp-save/manifest.json
+          fi
+
+          # Clear deploy and copy new build
+          rm -rf deploy/*
+          cp -r out/* deploy/
+
+          # Restore experiment directories
+          for dir in temp-save/*/; do
+            if [ -d "$dir" ]; then
+              dirname=$(basename "$dir")
+              cp -r "$dir" "deploy/$dirname"
+            fi
+          done
+
+          # Restore manifest
+          if [ -f temp-save/manifest.json ]; then
+            cp temp-save/manifest.json deploy/manifest.json
+          fi
+
+          touch deploy/.nojekyll
+
+      - name: Deploy experiment branch (subpath)
+        if: steps.extract.outputs.is_main == 'false'
+        run: |
+          EXPERIMENT_NAME="${{ steps.extract.outputs.experiment_name }}"
+
+          # Remove old version of this experiment
+          rm -rf "deploy/$EXPERIMENT_NAME"
+
+          # Copy new build to experiment folder
+          mkdir -p "deploy/$EXPERIMENT_NAME"
+          cp -r out/* "deploy/$EXPERIMENT_NAME/"
+
+      - name: Update manifest for experiment
+        if: steps.extract.outputs.is_main == 'false'
+        run: |
+          EXPERIMENT_NAME="${{ steps.extract.outputs.experiment_name }}"
+          EXPERIMENT_PATH="/$EXPERIMENT_NAME"
+
+          cd deploy
+
+          # Create manifest if it doesn't exist
+          if [ ! -f "manifest.json" ]; then
+            echo '{"experiments":[]}' > manifest.json
+          fi
+
+          # Install jq if needed
+          sudo apt-get update && sudo apt-get install -y jq
+
+          # Check if experiment already exists in manifest
+          if jq -e ".experiments[] | select(.path == \"$EXPERIMENT_PATH\")" manifest.json > /dev/null 2>&1; then
+            echo "Experiment already in manifest, updating timestamp"
+            jq "(.experiments[] | select(.path == \"$EXPERIMENT_PATH\")).updatedAt = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" manifest.json > temp.json
+            mv temp.json manifest.json
+          else
+            echo "Adding new experiment to manifest"
+            # Create pretty name from experiment name (convert-hyphens-to-spaces and capitalize)
+            PRETTY_NAME=$(echo "$EXPERIMENT_NAME" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
+            jq ".experiments += [{\"name\": \"$PRETTY_NAME\", \"path\": \"$EXPERIMENT_PATH\", \"createdAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]" manifest.json > temp.json
+            mv temp.json manifest.json
+          fi
+
+          cat manifest.json
+
+      - name: Push to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./deploy
+          keep_files: false
+          force_orphan: false
