@@ -131,10 +131,14 @@ jobs:
             fi
           done
 
-          # Reset manifest - experiments will re-add themselves when deployed
-          # This ensures we don't have stale entries from old format
-          echo '{"experiments":[]}' > deploy/manifest.json
-          echo "Reset manifest.json - experiments will re-register on next deployment"
+          # Restore manifest if it exists (preserve experiment entries)
+          if [ -f temp-save/manifest.json ]; then
+            echo "Restoring manifest.json"
+            cp temp-save/manifest.json deploy/manifest.json
+          else
+            echo "No manifest to restore, creating empty one"
+            echo '{"experiments":[]}' > deploy/manifest.json
+          fi
 
           touch deploy/.nojekyll
 
