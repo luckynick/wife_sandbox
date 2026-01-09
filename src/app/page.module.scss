@@ -81,14 +81,26 @@
   line-height: 1.5;
 }
 
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
 .cardPath {
   display: inline-block;
-  margin-top: 0.75rem;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--color-primary);
   background: var(--color-background);
   padding: 0.25rem 0.75rem;
   border-radius: 20px;
+}
+
+.cardDate {
+  font-size: 0.75rem;
+  color: var(--color-text-light);
 }
 
 .emptyState {

@@ -61,6 +61,21 @@ export default function Home() {
     return `${base}${path}/`;
   };
 
+  // Format date for display
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return null;
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <main className={styles.container}>
       <header className={styles.hero}>
@@ -96,7 +111,14 @@ export default function Home() {
                 {exp.description && (
                   <p className={styles.cardDescription}>{exp.description}</p>
                 )}
-                <span className={styles.cardPath}>{exp.path}</span>
+                <div className={styles.cardMeta}>
+                  <span className={styles.cardPath}>{exp.path}</span>
+                  {formatDate(exp.createdAt) && (
+                    <span className={styles.cardDate}>
+                      Created {formatDate(exp.createdAt)}
+                    </span>
+                  )}
+                </div>
               </a>
             ))}
           </div>
