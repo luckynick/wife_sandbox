@@ -1,3 +1,0 @@
-:HL["/wife_sandbox/coaching-website-design/_next/static/chunks/26e0d96714a40f55.css","style"]
-:HL["/wife_sandbox/coaching-website-design/_next/static/chunks/4a18e51e22e082d0.css","style"]
-0:{"buildId":"43WAIVMNePrOFcuo54_vK","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"coaching-website","paramType":null,"paramKey":"coaching-website","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}
