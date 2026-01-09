@@ -1,0 +1,3 @@
+:HL["/wife_sandbox/coaching-website-light-theme-qufdY/_next/static/chunks/26e0d96714a40f55.css","style"]
+:HL["/wife_sandbox/coaching-website-light-theme-qufdY/_next/static/chunks/de724154716f14a6.css","style"]
+0:{"buildId":"bQTM6E_fYK6zGOL2_UUQD","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"coaching-website-light-theme","paramType":null,"paramKey":"coaching-website-light-theme","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}
