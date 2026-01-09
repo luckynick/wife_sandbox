@@ -61,10 +61,11 @@ jobs:
             echo "base_path=/${{ steps.repo.outputs.name }}" >> $GITHUB_OUTPUT
             echo "is_main=true" >> $GITHUB_OUTPUT
           else
-            # Extract name from claude/name-sessionId pattern
-            NAME=$(echo "$BRANCH" | sed 's|^claude/||' | sed 's|-[a-zA-Z0-9]*$||')
-            echo "experiment_name=$NAME" >> $GITHUB_OUTPUT
-            echo "base_path=/${{ steps.repo.outputs.name }}/$NAME" >> $GITHUB_OUTPUT
+            # Keep FULL name (with session ID) for uniqueness - prevents collisions
+            # e.g., claude/coaching-website-design-Px8p3 -> coaching-website-design-Px8p3
+            FULL_NAME=$(echo "$BRANCH" | sed 's|^claude/||')
+            echo "experiment_name=$FULL_NAME" >> $GITHUB_OUTPUT
+            echo "base_path=/${{ steps.repo.outputs.name }}/$FULL_NAME" >> $GITHUB_OUTPUT
             echo "is_main=false" >> $GITHUB_OUTPUT
           fi
 
@@ -140,11 +141,20 @@ jobs:
           cd deploy
           echo "Generating manifest by scanning all experiment directories..."
 
+          # Save old manifest to preserve creation dates
+          OLD_MANIFEST="{}"
+          if [ -f "manifest.json" ]; then
+            OLD_MANIFEST=$(cat manifest.json)
+          fi
+
           # Start fresh manifest
           echo '{"experiments":[]}' > manifest.json
 
           # List of directories to skip (Next.js infrastructure + setup branches)
           SKIP_DIRS="_next|_not-found|404|welcome|setup"
+
+          # Current timestamp for new entries
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
           # Scan all top-level directories for experiment folders
           for exp_dir in */; do
@@ -173,13 +183,21 @@ jobs:
                   if [ -f "$page_dir/index.html" ]; then
                     PAGE_PATH="/$exp_name/$page_name"
 
-                    # Create pretty name from page name
-                    PRETTY_NAME=$(echo "$page_name" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
+                    # Create friendly display name:
+                    # 1. Use page name, remove session ID suffix if present
+                    # 2. Convert hyphens to spaces, capitalize words
+                    FRIENDLY_NAME=$(echo "$page_name" | sed 's|-[a-zA-Z0-9]*$||' | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
 
-                    echo "  Found page: $PAGE_PATH ($PRETTY_NAME)"
+                    # Try to get creation date from old manifest, otherwise use now
+                    CREATED_AT=$(echo "$OLD_MANIFEST" | jq -r ".experiments[] | select(.path == \"$PAGE_PATH\") | .createdAt // empty" 2>/dev/null)
+                    if [ -z "$CREATED_AT" ]; then
+                      CREATED_AT="$NOW"
+                    fi
 
-                    # Add to manifest
-                    jq ".experiments += [{\"name\": \"$PRETTY_NAME\", \"path\": \"$PAGE_PATH\"}]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+                    echo "  Found page: $PAGE_PATH ($FRIENDLY_NAME) - created: $CREATED_AT"
+
+                    # Add to manifest with creation date
+                    jq ".experiments += [{\"name\": \"$FRIENDLY_NAME\", \"path\": \"$PAGE_PATH\", \"createdAt\": \"$CREATED_AT\"}]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
                   fi
                 fi
               done
