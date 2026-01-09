@@ -80,12 +80,15 @@ jobs:
         run: |
           mkdir -p deploy
 
-          # Copy existing gh-pages content if it exists
-          if [ -d "gh-pages" ] && [ -f "gh-pages/index.html" ]; then
+          # Copy ALL existing gh-pages content if it exists (preserve experiments even if root is broken)
+          if [ -d "gh-pages" ]; then
             echo "Copying existing gh-pages content..."
-            cp -r gh-pages/* deploy/ 2>/dev/null || true
-            # Remove .git if it was copied
-            rm -rf deploy/.git
+            # Copy everything except .git
+            find gh-pages -mindepth 1 -maxdepth 1 ! -name '.git' -exec cp -r {} deploy/ \;
+            echo "Copied from gh-pages:"
+            ls -la deploy/
+          else
+            echo "No existing gh-pages content found"
           fi
 
           # Ensure .nojekyll exists
