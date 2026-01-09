@@ -1,3 +1,9 @@
 {
-  "experiments": []
+  "experiments": [
+    {
+      "name": "Coaching Website Design",
+      "path": "/coaching-website-design",
+      "createdAt": "2026-01-09T20:49:18Z"
+    }
+  ]
 }
