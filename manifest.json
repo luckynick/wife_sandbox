@@ -1,14 +1,1 @@
-{
-  "experiments": [
-    {
-      "name": "Coaching Website",
-      "path": "/coaching-website-design/coaching-website",
-      "createdAt": "2026-01-09T21:41:31Z"
-    },
-    {
-      "name": "Coaching Website Light Theme",
-      "path": "/coaching-website-light-theme/coaching-website-light-theme",
-      "createdAt": "2026-01-09T21:48:52Z"
-    }
-  ]
-}
+{"experiments":[]}
