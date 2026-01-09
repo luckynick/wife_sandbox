@@ -12,9 +12,10 @@ permissions:
   pages: write
   id-token: write
 
+# Use a single concurrency group for all deployments to prevent race conditions
 concurrency:
-  group: "pages-${{ github.ref }}"
-  cancel-in-progress: true
+  group: "pages-deployment"
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -22,15 +23,26 @@ jobs:
     steps:
       - name: Checkout source branch
         uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: source/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+        working-directory: source
 
       - name: Get repository name
         id: repo
@@ -48,7 +60,6 @@ jobs:
             # Main branch deploys to root with repo name as base
             echo "experiment_name=" >> $GITHUB_OUTPUT
             echo "base_path=/${{ steps.repo.outputs.name }}" >> $GITHUB_OUTPUT
-            echo "deploy_dir=." >> $GITHUB_OUTPUT
             echo "is_main=true" >> $GITHUB_OUTPUT
           else
             # Extract name from claude/name-sessionId pattern
@@ -56,78 +67,103 @@ jobs:
             NAME=$(echo "$BRANCH" | sed 's|^claude/||' | sed 's|-[a-zA-Z0-9]*$||')
             echo "experiment_name=$NAME" >> $GITHUB_OUTPUT
             echo "base_path=/${{ steps.repo.outputs.name }}/$NAME" >> $GITHUB_OUTPUT
-            echo "deploy_dir=$NAME" >> $GITHUB_OUTPUT
             echo "is_main=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Build Next.js app
         run: npm run build
+        working-directory: source
         env:
           NEXT_PUBLIC_BASE_PATH: ${{ steps.extract.outputs.base_path }}
-
-      - name: Fetch gh-pages branch
-        run: |
-          git fetch origin gh-pages:gh-pages || echo "gh-pages branch doesn't exist yet"
 
       - name: Prepare deployment directory
         run: |
           mkdir -p deploy
 
-          # Try to get existing gh-pages content
-          if git show gh-pages:. > /dev/null 2>&1; then
-            git archive gh-pages | tar -x -C deploy
+          # Copy existing gh-pages content if it exists
+          if [ -d "gh-pages" ] && [ -f "gh-pages/index.html" ]; then
+            echo "Copying existing gh-pages content..."
+            cp -r gh-pages/* deploy/ 2>/dev/null || true
+            # Remove .git if it was copied
+            rm -rf deploy/.git
           fi
 
-          # Add .nojekyll
+          # Ensure .nojekyll exists
           touch deploy/.nojekyll
+
+          # List what we have so far
+          echo "Current deploy directory contents:"
+          ls -la deploy/
 
       - name: Deploy main branch (root)
         if: steps.extract.outputs.is_main == 'true'
         run: |
-          # Save existing experiment directories
+          echo "Deploying main branch to root..."
+
+          # Save existing experiment directories and manifest
           mkdir -p temp-save
           for dir in deploy/*/; do
             if [ -d "$dir" ]; then
               dirname=$(basename "$dir")
+              echo "Saving experiment directory: $dirname"
               cp -r "$dir" "temp-save/$dirname"
             fi
           done
 
-          # Save manifest
           if [ -f deploy/manifest.json ]; then
+            echo "Saving manifest.json"
             cp deploy/manifest.json temp-save/manifest.json
           fi
 
           # Clear deploy and copy new build
           rm -rf deploy/*
-          cp -r out/* deploy/
+          cp -r source/out/* deploy/
 
           # Restore experiment directories
           for dir in temp-save/*/; do
             if [ -d "$dir" ]; then
               dirname=$(basename "$dir")
+              echo "Restoring experiment directory: $dirname"
               cp -r "$dir" "deploy/$dirname"
             fi
           done
 
-          # Restore manifest
+          # Restore manifest (merge with any new content)
           if [ -f temp-save/manifest.json ]; then
+            echo "Restoring manifest.json"
             cp temp-save/manifest.json deploy/manifest.json
           fi
 
           touch deploy/.nojekyll
 
+          echo "Final deploy directory contents:"
+          ls -la deploy/
+
       - name: Deploy experiment branch (subpath)
         if: steps.extract.outputs.is_main == 'false'
         run: |
           EXPERIMENT_NAME="${{ steps.extract.outputs.experiment_name }}"
+          echo "Deploying experiment '$EXPERIMENT_NAME' to subpath..."
 
-          # Remove old version of this experiment
+          # Verify we have the root content
+          if [ ! -f "deploy/index.html" ]; then
+            echo "WARNING: Root index.html not found in deploy directory!"
+            echo "This might indicate gh-pages checkout failed."
+            echo "Deploy directory contents:"
+            ls -la deploy/
+          fi
+
+          # Remove old version of this experiment only
           rm -rf "deploy/$EXPERIMENT_NAME"
 
           # Copy new build to experiment folder
           mkdir -p "deploy/$EXPERIMENT_NAME"
-          cp -r out/* "deploy/$EXPERIMENT_NAME/"
+          cp -r source/out/* "deploy/$EXPERIMENT_NAME/"
+
+          echo "Final deploy directory contents:"
+          ls -la deploy/
+          echo "Experiment directory contents:"
+          ls -la "deploy/$EXPERIMENT_NAME/" | head -20
 
       - name: Update manifest for experiment
         if: steps.extract.outputs.is_main == 'false'
@@ -142,22 +178,25 @@ jobs:
             echo '{"experiments":[]}' > manifest.json
           fi
 
-          # Install jq if needed
-          sudo apt-get update && sudo apt-get install -y jq
-
           # Check if experiment already exists in manifest
-          if jq -e ".experiments[] | select(.path == \"$EXPERIMENT_PATH\")" manifest.json > /dev/null 2>&1; then
-            echo "Experiment already in manifest, updating timestamp"
-            jq "(.experiments[] | select(.path == \"$EXPERIMENT_PATH\")).updatedAt = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" manifest.json > temp.json
-            mv temp.json manifest.json
+          if grep -q "\"path\": \"$EXPERIMENT_PATH\"" manifest.json; then
+            echo "Experiment already in manifest"
           else
             echo "Adding new experiment to manifest"
-            # Create pretty name from experiment name (convert-hyphens-to-spaces and capitalize)
+            # Create pretty name from experiment name
             PRETTY_NAME=$(echo "$EXPERIMENT_NAME" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
-            jq ".experiments += [{\"name\": \"$PRETTY_NAME\", \"path\": \"$EXPERIMENT_PATH\", \"createdAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]" manifest.json > temp.json
-            mv temp.json manifest.json
+
+            # Use sed to add new entry (more portable than jq)
+            if grep -q '"experiments":\[\]' manifest.json; then
+              # Empty array - replace with new entry
+              sed -i "s|\"experiments\":\[\]|\"experiments\":[{\"name\": \"$PRETTY_NAME\", \"path\": \"$EXPERIMENT_PATH\", \"createdAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]|" manifest.json
+            else
+              # Has entries - add to array
+              sed -i "s|\"experiments\":\[|\"experiments\":[{\"name\": \"$PRETTY_NAME\", \"path\": \"$EXPERIMENT_PATH\", \"createdAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"},|" manifest.json
+            fi
           fi
 
+          echo "Updated manifest:"
           cat manifest.json
 
       - name: Push to gh-pages
@@ -166,4 +205,3 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./deploy
           keep_files: false
-          force_orphan: false
