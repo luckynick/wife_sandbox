@@ -1,0 +1,385 @@
+// Coaching Website - Dark elegant theme with warm gold accents
+// Inspired by @coach_moiseienko Instagram aesthetic
+
+$color-bg-dark: #0a0a0a;
+$color-bg-section: #111111;
+$color-bg-card: #1a1a1a;
+$color-gold: #d4a853;
+$color-gold-light: #e8c97a;
+$color-gold-dark: #b08930;
+$color-text: #f5f5f5;
+$color-text-muted: #a0a0a0;
+$color-accent-pink: #c44569;
+$color-accent-warm: #8b6914;
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Montserrat:wght@300;400;500&display=swap');
+
+.main {
+  min-height: 100vh;
+  background: $color-bg-dark;
+  color: $color-text;
+  font-family: 'Montserrat', sans-serif;
+  overflow-x: hidden;
+}
+
+// Hero Section
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  position: relative;
+  background: linear-gradient(
+    180deg,
+    $color-bg-dark 0%,
+    darken($color-bg-section, 2%) 100%
+  );
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(
+      ellipse at center top,
+      rgba($color-gold, 0.08) 0%,
+      transparent 60%
+    );
+    pointer-events: none;
+  }
+}
+
+.heroContent {
+  text-align: center;
+  z-index: 1;
+}
+
+.profileImageWrapper {
+  margin-bottom: 2rem;
+}
+
+.profileImage {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, $color-gold, $color-accent-pink, $color-gold-dark);
+  padding: 4px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .initials {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: $color-bg-dark;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 3.5rem;
+    font-weight: 500;
+    color: $color-gold;
+    letter-spacing: 2px;
+  }
+}
+
+.name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 500;
+  color: $color-text;
+  margin-bottom: 0.5rem;
+  letter-spacing: 1px;
+}
+
+.tagline {
+  font-size: 1.25rem;
+  color: $color-gold;
+  font-weight: 300;
+  margin-bottom: 1rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  font-size: 1rem;
+  color: $color-text-muted;
+  letter-spacing: 2px;
+}
+
+// About Section
+.about {
+  padding: 6rem 0;
+  background: $color-bg-section;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.sectionTitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 2rem;
+  color: $color-text;
+  position: relative;
+
+  &::after {
+    content: '';
+    display: block;
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, $color-gold, transparent);
+    margin: 1rem auto 0;
+  }
+}
+
+.aboutText {
+  font-size: 1.25rem;
+  line-height: 1.9;
+  text-align: center;
+  color: $color-text-muted;
+  max-width: 700px;
+  margin: 0 auto 4rem;
+  font-weight: 300;
+}
+
+.values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+}
+
+.valueCard {
+  background: $color-bg-card;
+  padding: 2.5rem 2rem;
+  border-radius: 16px;
+  text-align: center;
+  border: 1px solid rgba($color-gold, 0.1);
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: rgba($color-gold, 0.3);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .valueIcon {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 1rem;
+  }
+
+  h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: $color-gold-light;
+    margin-bottom: 0.75rem;
+  }
+
+  p {
+    color: $color-text-muted;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    font-weight: 300;
+  }
+}
+
+// Services Section
+.services {
+  padding: 6rem 0;
+  background: $color-bg-dark;
+}
+
+.servicesList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+}
+
+.serviceCard {
+  padding: 2.5rem;
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba($color-gold, 0.05) 0%,
+    rgba($color-bg-card, 0.8) 100%
+  );
+  border: 1px solid rgba($color-gold, 0.15);
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: rgba($color-gold, 0.4);
+    background: linear-gradient(
+      135deg,
+      rgba($color-gold, 0.1) 0%,
+      rgba($color-bg-card, 0.9) 100%
+    );
+  }
+
+  h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: $color-text;
+    margin-bottom: 1rem;
+    position: relative;
+    padding-left: 1rem;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 70%;
+      background: $color-gold;
+      border-radius: 2px;
+    }
+  }
+
+  p {
+    color: $color-text-muted;
+    line-height: 1.7;
+    font-weight: 300;
+  }
+}
+
+// Contact Section
+.contact {
+  padding: 6rem 0;
+  background: $color-bg-section;
+}
+
+.contactLinks {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.contactLink {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.75rem;
+  background: $color-bg-card;
+  border-radius: 12px;
+  color: $color-text;
+  text-decoration: none;
+  border: 1px solid rgba($color-gold, 0.1);
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: $color-gold;
+    background: rgba($color-gold, 0.08);
+    transform: translateX(8px);
+
+    .handle {
+      color: $color-gold;
+    }
+  }
+
+  .linkIcon {
+    font-size: 1.5rem;
+    width: 40px;
+    text-align: center;
+  }
+
+  span:nth-child(2) {
+    font-weight: 500;
+    flex: 1;
+  }
+
+  .handle {
+    color: $color-text-muted;
+    font-size: 0.9rem;
+    transition: color 0.3s ease;
+  }
+}
+
+// Footer
+.footer {
+  padding: 3rem 2rem;
+  text-align: center;
+  background: $color-bg-dark;
+  border-top: 1px solid rgba($color-gold, 0.1);
+
+  p {
+    color: $color-text-muted;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .footerTagline {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    font-style: italic;
+    color: $color-gold;
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .hero {
+    padding: 4rem 1.5rem;
+  }
+
+  .profileImage {
+    width: 140px;
+    height: 140px;
+
+    .initials {
+      font-size: 2.5rem;
+    }
+  }
+
+  .tagline {
+    font-size: 1rem;
+    letter-spacing: 2px;
+  }
+
+  .about,
+  .services,
+  .contact {
+    padding: 4rem 0;
+  }
+
+  .container {
+    padding: 0 1.5rem;
+  }
+
+  .aboutText {
+    font-size: 1.1rem;
+    margin-bottom: 3rem;
+  }
+
+  .values {
+    gap: 1.5rem;
+  }
+
+  .valueCard {
+    padding: 2rem 1.5rem;
+  }
+
+  .serviceCard {
+    padding: 2rem;
+  }
+
+  .contactLink {
+    padding: 1rem 1.25rem;
+  }
+}
