@@ -2,6 +2,11 @@
   "experiments": [
     {
       "name": "Coaching",
+      "path": "/coaching-website-design-Px8p3/coaching-website",
+      "createdAt": "2026-01-09T23:07:47Z"
+    },
+    {
+      "name": "Coaching",
       "path": "/coaching-website-design/coaching",
       "createdAt": "2026-01-09T22:50:18Z"
     },
