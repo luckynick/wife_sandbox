@@ -181,22 +181,21 @@ jobs:
             echo '{"experiments":[]}' > manifest.json
           fi
 
+          # Create pretty name from experiment name (convert-hyphens-to-spaces and capitalize)
+          PRETTY_NAME=$(echo "$EXPERIMENT_NAME" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
+          CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          echo "Experiment name: $EXPERIMENT_NAME"
+          echo "Pretty name: $PRETTY_NAME"
+          echo "Path: $EXPERIMENT_PATH"
+
           # Check if experiment already exists in manifest
-          if grep -q "\"path\": \"$EXPERIMENT_PATH\"" manifest.json; then
-            echo "Experiment already in manifest"
+          if jq -e ".experiments[] | select(.path == \"$EXPERIMENT_PATH\")" manifest.json > /dev/null 2>&1; then
+            echo "Experiment already in manifest, updating timestamp"
+            jq ".experiments = [.experiments[] | if .path == \"$EXPERIMENT_PATH\" then .updatedAt = \"$CREATED_AT\" else . end]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
           else
             echo "Adding new experiment to manifest"
-            # Create pretty name from experiment name
-            PRETTY_NAME=$(echo "$EXPERIMENT_NAME" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
-
-            # Use sed to add new entry (more portable than jq)
-            if grep -q '"experiments":\[\]' manifest.json; then
-              # Empty array - replace with new entry
-              sed -i "s|\"experiments\":\[\]|\"experiments\":[{\"name\": \"$PRETTY_NAME\", \"path\": \"$EXPERIMENT_PATH\", \"createdAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]|" manifest.json
-            else
-              # Has entries - add to array
-              sed -i "s|\"experiments\":\[|\"experiments\":[{\"name\": \"$PRETTY_NAME\", \"path\": \"$EXPERIMENT_PATH\", \"createdAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"},|" manifest.json
-            fi
+            jq ".experiments += [{\"name\": \"$PRETTY_NAME\", \"path\": \"$EXPERIMENT_PATH\", \"createdAt\": \"$CREATED_AT\"}]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
           fi
 
           echo "Updated manifest:"
