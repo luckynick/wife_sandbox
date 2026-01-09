@@ -57,13 +57,11 @@ jobs:
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
           if [[ "$BRANCH" == "main" ]]; then
-            # Main branch deploys to root with repo name as base
             echo "experiment_name=" >> $GITHUB_OUTPUT
             echo "base_path=/${{ steps.repo.outputs.name }}" >> $GITHUB_OUTPUT
             echo "is_main=true" >> $GITHUB_OUTPUT
           else
             # Extract name from claude/name-sessionId pattern
-            # Remove 'claude/' prefix and the session ID suffix (last hyphen + alphanumeric)
             NAME=$(echo "$BRANCH" | sed 's|^claude/||' | sed 's|-[a-zA-Z0-9]*$||')
             echo "experiment_name=$NAME" >> $GITHUB_OUTPUT
             echo "base_path=/${{ steps.repo.outputs.name }}/$NAME" >> $GITHUB_OUTPUT
@@ -80,10 +78,9 @@ jobs:
         run: |
           mkdir -p deploy
 
-          # Copy ALL existing gh-pages content if it exists (preserve experiments even if root is broken)
+          # Copy ALL existing gh-pages content if it exists
           if [ -d "gh-pages" ]; then
             echo "Copying existing gh-pages content..."
-            # Copy everything except .git
             find gh-pages -mindepth 1 -maxdepth 1 ! -name '.git' -exec cp -r {} deploy/ \;
             echo "Copied from gh-pages:"
             ls -la deploy/
@@ -91,19 +88,14 @@ jobs:
             echo "No existing gh-pages content found"
           fi
 
-          # Ensure .nojekyll exists
           touch deploy/.nojekyll
-
-          # List what we have so far
-          echo "Current deploy directory contents:"
-          ls -la deploy/
 
       - name: Deploy main branch (root)
         if: steps.extract.outputs.is_main == 'true'
         run: |
           echo "Deploying main branch to root..."
 
-          # Save existing experiment directories and manifest
+          # Save existing experiment directories
           mkdir -p temp-save
           for dir in deploy/*/; do
             if [ -d "$dir" ]; then
@@ -112,11 +104,6 @@ jobs:
               cp -r "$dir" "temp-save/$dirname"
             fi
           done
-
-          if [ -f deploy/manifest.json ]; then
-            echo "Saving manifest.json"
-            cp deploy/manifest.json temp-save/manifest.json
-          fi
 
           # Clear deploy and copy new build
           rm -rf deploy/*
@@ -131,33 +118,13 @@ jobs:
             fi
           done
 
-          # Restore manifest if it exists (preserve experiment entries)
-          if [ -f temp-save/manifest.json ]; then
-            echo "Restoring manifest.json"
-            cp temp-save/manifest.json deploy/manifest.json
-          else
-            echo "No manifest to restore, creating empty one"
-            echo '{"experiments":[]}' > deploy/manifest.json
-          fi
-
           touch deploy/.nojekyll
-
-          echo "Final deploy directory contents:"
-          ls -la deploy/
 
       - name: Deploy experiment branch (subpath)
         if: steps.extract.outputs.is_main == 'false'
         run: |
           EXPERIMENT_NAME="${{ steps.extract.outputs.experiment_name }}"
           echo "Deploying experiment '$EXPERIMENT_NAME' to subpath..."
-
-          # Verify we have the root content
-          if [ ! -f "deploy/index.html" ]; then
-            echo "WARNING: Root index.html not found in deploy directory!"
-            echo "This might indicate gh-pages checkout failed."
-            echo "Deploy directory contents:"
-            ls -la deploy/
-          fi
 
           # Remove old version of this experiment only
           rm -rf "deploy/$EXPERIMENT_NAME"
@@ -166,66 +133,61 @@ jobs:
           mkdir -p "deploy/$EXPERIMENT_NAME"
           cp -r source/out/* "deploy/$EXPERIMENT_NAME/"
 
-          echo "Final deploy directory contents:"
-          ls -la deploy/
-          echo "Experiment directory contents:"
-          ls -la "deploy/$EXPERIMENT_NAME/" | head -20
+          echo "Experiment deployed to: deploy/$EXPERIMENT_NAME/"
 
-      - name: Update manifest for experiment
-        if: steps.extract.outputs.is_main == 'false'
+      - name: Generate manifest dynamically
         run: |
-          EXPERIMENT_NAME="${{ steps.extract.outputs.experiment_name }}"
-          CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
           cd deploy
+          echo "Generating manifest by scanning all experiment directories..."
 
-          # Skip setup/infrastructure branches - they're not real experiments
-          if [[ "$EXPERIMENT_NAME" == *"setup"* ]]; then
-            echo "Skipping setup branch - not adding to manifest"
-            exit 0
-          fi
+          # Start fresh manifest
+          echo '{"experiments":[]}' > manifest.json
 
-          # Create manifest if it doesn't exist
-          if [ ! -f "manifest.json" ]; then
-            echo '{"experiments":[]}' > manifest.json
-          fi
+          # List of directories to skip (Next.js infrastructure + setup branches)
+          SKIP_DIRS="_next|_not-found|404|welcome|setup"
 
-          # Find actual pages created in this experiment (not Next.js infrastructure)
-          # Look for directories with index.html that aren't system directories
-          EXPERIMENT_DIR="$EXPERIMENT_NAME"
-          echo "Scanning $EXPERIMENT_DIR for pages..."
+          # Scan all top-level directories for experiment folders
+          for exp_dir in */; do
+            if [ -d "$exp_dir" ]; then
+              exp_name=$(basename "$exp_dir")
 
-          for page_dir in "$EXPERIMENT_DIR"/*/; do
-            if [ -d "$page_dir" ]; then
-              page_name=$(basename "$page_dir")
-
-              # Skip Next.js infrastructure directories
-              if [[ "$page_name" == "_next" ]] || [[ "$page_name" == "_not-found" ]] || [[ "$page_name" == "404" ]] || [[ "$page_name" == "welcome" ]]; then
+              # Skip infrastructure directories and setup branches
+              if [[ "$exp_name" =~ ^($SKIP_DIRS) ]] || [[ "$exp_name" == *"setup"* ]]; then
+                echo "Skipping: $exp_name"
                 continue
               fi
 
-              # Check if it has an index.html (is a real page)
-              if [ -f "$page_dir/index.html" ]; then
-                PAGE_PATH="/$EXPERIMENT_NAME/$page_name"
+              echo "Scanning experiment: $exp_name"
 
-                # Create pretty name from page name
-                PRETTY_NAME=$(echo "$page_name" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
+              # Look for actual pages inside this experiment
+              for page_dir in "$exp_dir"/*/; do
+                if [ -d "$page_dir" ]; then
+                  page_name=$(basename "$page_dir")
 
-                echo "Found page: $page_name -> $PAGE_PATH ($PRETTY_NAME)"
+                  # Skip Next.js infrastructure
+                  if [[ "$page_name" =~ ^($SKIP_DIRS) ]]; then
+                    continue
+                  fi
 
-                # Check if this page already exists in manifest
-                if jq -e ".experiments[] | select(.path == \"$PAGE_PATH\")" manifest.json > /dev/null 2>&1; then
-                  echo "Page already in manifest, updating timestamp"
-                  jq ".experiments = [.experiments[] | if .path == \"$PAGE_PATH\" then .updatedAt = \"$CREATED_AT\" else . end]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
-                else
-                  echo "Adding new page to manifest"
-                  jq ".experiments += [{\"name\": \"$PRETTY_NAME\", \"path\": \"$PAGE_PATH\", \"createdAt\": \"$CREATED_AT\"}]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+                  # Check if it's a real page (has index.html)
+                  if [ -f "$page_dir/index.html" ]; then
+                    PAGE_PATH="/$exp_name/$page_name"
+
+                    # Create pretty name from page name
+                    PRETTY_NAME=$(echo "$page_name" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
+
+                    echo "  Found page: $PAGE_PATH ($PRETTY_NAME)"
+
+                    # Add to manifest
+                    jq ".experiments += [{\"name\": \"$PRETTY_NAME\", \"path\": \"$PAGE_PATH\"}]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+                  fi
                 fi
-              fi
+              done
             fi
           done
 
-          echo "Updated manifest:"
+          echo ""
+          echo "Generated manifest:"
           cat manifest.json
 
       - name: Push to gh-pages
