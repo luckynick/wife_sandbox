@@ -2,11 +2,13 @@
   "experiments": [
     {
       "name": "Coaching",
-      "path": "/coaching-website-design/coaching"
+      "path": "/coaching-website-design/coaching",
+      "createdAt": "2026-01-09T22:48:45Z"
     },
     {
-      "name": "Coaching Website Light Theme",
-      "path": "/coaching-website-light-theme/coaching-website-light-theme"
+      "name": "Coaching Website Light",
+      "path": "/coaching-website-light-theme/coaching-website-light-theme",
+      "createdAt": "2026-01-09T22:48:45Z"
     }
   ]
 }
