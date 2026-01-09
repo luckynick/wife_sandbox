@@ -131,11 +131,10 @@ jobs:
             fi
           done
 
-          # Restore manifest (merge with any new content)
-          if [ -f temp-save/manifest.json ]; then
-            echo "Restoring manifest.json"
-            cp temp-save/manifest.json deploy/manifest.json
-          fi
+          # Reset manifest - experiments will re-add themselves when deployed
+          # This ensures we don't have stale entries from old format
+          echo '{"experiments":[]}' > deploy/manifest.json
+          echo "Reset manifest.json - experiments will re-register on next deployment"
 
           touch deploy/.nojekyll
 
@@ -172,31 +171,55 @@ jobs:
         if: steps.extract.outputs.is_main == 'false'
         run: |
           EXPERIMENT_NAME="${{ steps.extract.outputs.experiment_name }}"
-          EXPERIMENT_PATH="/$EXPERIMENT_NAME"
+          CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
           cd deploy
+
+          # Skip setup/infrastructure branches - they're not real experiments
+          if [[ "$EXPERIMENT_NAME" == *"setup"* ]]; then
+            echo "Skipping setup branch - not adding to manifest"
+            exit 0
+          fi
 
           # Create manifest if it doesn't exist
           if [ ! -f "manifest.json" ]; then
             echo '{"experiments":[]}' > manifest.json
           fi
 
-          # Create pretty name from experiment name (convert-hyphens-to-spaces and capitalize)
-          PRETTY_NAME=$(echo "$EXPERIMENT_NAME" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
-          CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Find actual pages created in this experiment (not Next.js infrastructure)
+          # Look for directories with index.html that aren't system directories
+          EXPERIMENT_DIR="$EXPERIMENT_NAME"
+          echo "Scanning $EXPERIMENT_DIR for pages..."
 
-          echo "Experiment name: $EXPERIMENT_NAME"
-          echo "Pretty name: $PRETTY_NAME"
-          echo "Path: $EXPERIMENT_PATH"
+          for page_dir in "$EXPERIMENT_DIR"/*/; do
+            if [ -d "$page_dir" ]; then
+              page_name=$(basename "$page_dir")
 
-          # Check if experiment already exists in manifest
-          if jq -e ".experiments[] | select(.path == \"$EXPERIMENT_PATH\")" manifest.json > /dev/null 2>&1; then
-            echo "Experiment already in manifest, updating timestamp"
-            jq ".experiments = [.experiments[] | if .path == \"$EXPERIMENT_PATH\" then .updatedAt = \"$CREATED_AT\" else . end]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
-          else
-            echo "Adding new experiment to manifest"
-            jq ".experiments += [{\"name\": \"$PRETTY_NAME\", \"path\": \"$EXPERIMENT_PATH\", \"createdAt\": \"$CREATED_AT\"}]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
-          fi
+              # Skip Next.js infrastructure directories
+              if [[ "$page_name" == "_next" ]] || [[ "$page_name" == "_not-found" ]] || [[ "$page_name" == "404" ]] || [[ "$page_name" == "welcome" ]]; then
+                continue
+              fi
+
+              # Check if it has an index.html (is a real page)
+              if [ -f "$page_dir/index.html" ]; then
+                PAGE_PATH="/$EXPERIMENT_NAME/$page_name"
+
+                # Create pretty name from page name
+                PRETTY_NAME=$(echo "$page_name" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
+
+                echo "Found page: $page_name -> $PAGE_PATH ($PRETTY_NAME)"
+
+                # Check if this page already exists in manifest
+                if jq -e ".experiments[] | select(.path == \"$PAGE_PATH\")" manifest.json > /dev/null 2>&1; then
+                  echo "Page already in manifest, updating timestamp"
+                  jq ".experiments = [.experiments[] | if .path == \"$PAGE_PATH\" then .updatedAt = \"$CREATED_AT\" else . end]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+                else
+                  echo "Adding new page to manifest"
+                  jq ".experiments += [{\"name\": \"$PRETTY_NAME\", \"path\": \"$PAGE_PATH\", \"createdAt\": \"$CREATED_AT\"}]" manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+                fi
+              fi
+            fi
+          done
 
           echo "Updated manifest:"
           cat manifest.json
