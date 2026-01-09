@@ -136,6 +136,47 @@ jobs:
 
           echo "Experiment deployed to: deploy/$EXPERIMENT_NAME/"
 
+      - name: Purge orphan experiments
+        run: |
+          cd source
+          echo "Checking for orphan experiment folders..."
+
+          # Get all remote branch names (claude/* branches)
+          git fetch --all --quiet
+          ACTIVE_EXPERIMENTS=$(git branch -r | grep 'origin/claude/' | sed 's|.*origin/claude/||' | sort)
+
+          echo "Active experiment branches:"
+          echo "$ACTIVE_EXPERIMENTS"
+
+          cd ../deploy
+
+          # List of directories to skip (Next.js infrastructure)
+          SKIP_PATTERN="^(_next|_not-found|404|welcome|setup)"
+
+          # Check each directory in deploy
+          for dir in */; do
+            if [ -d "$dir" ]; then
+              dirname=$(basename "$dir")
+
+              # Skip infrastructure directories
+              if [[ "$dirname" =~ $SKIP_PATTERN ]] || [[ "$dirname" == *"setup"* ]]; then
+                continue
+              fi
+
+              # Check if this experiment has a matching branch
+              if echo "$ACTIVE_EXPERIMENTS" | grep -q "^${dirname}$"; then
+                echo "Active: $dirname"
+              else
+                echo "ORPHAN: $dirname - removing..."
+                rm -rf "$dirname"
+              fi
+            fi
+          done
+
+          echo ""
+          echo "Remaining directories:"
+          ls -la
+
       - name: Generate manifest dynamically
         run: |
           cd deploy
