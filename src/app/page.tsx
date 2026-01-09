@@ -16,33 +16,49 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 export default function Home() {
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Try to load the manifest of deployed experiments
-    // First try root manifest, then base path manifest
-    const manifestUrl = basePath ? `${basePath}/manifest.json` : "/manifest.json";
+    // Add cache-busting timestamp to avoid stale manifest
+    const cacheBuster = `?t=${Date.now()}`;
 
-    fetch(manifestUrl)
-      .then((res) => {
-        if (res.ok) return res.json();
-        // Try alternative path
-        return fetch("/manifest.json").then(r => r.ok ? r.json() : { experiments: [] });
-      })
-      .then((data) => {
-        setExperiments(data.experiments || []);
-        setLoading(false);
-      })
-      .catch(() => {
-        setExperiments([]);
-        setLoading(false);
-      });
+    // Try multiple manifest locations for robustness
+    const manifestUrls = [
+      `${basePath}/manifest.json${cacheBuster}`,
+      `/wife_sandbox/manifest.json${cacheBuster}`,
+      `/manifest.json${cacheBuster}`,
+    ].filter((url, i, arr) => arr.indexOf(url) === i); // dedupe
+
+    const fetchManifest = async () => {
+      for (const url of manifestUrls) {
+        try {
+          const res = await fetch(url);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.experiments && Array.isArray(data.experiments)) {
+              setExperiments(data.experiments);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // Try next URL
+        }
+      }
+      // All URLs failed
+      setExperiments([]);
+      setLoading(false);
+    };
+
+    fetchManifest();
   }, []);
 
   // Build the correct href for experiment links
   const getExperimentHref = (path: string) => {
-    // On GitHub Pages, experiments are deployed under the repo root
-    // The path already includes the leading slash
-    return basePath ? `${basePath}${path}` : path;
+    // Construct full URL - path already has leading slash
+    // Use /wife_sandbox as base for GitHub Pages
+    const base = basePath || "/wife_sandbox";
+    return `${base}${path}/`;
   };
 
   return (
@@ -62,6 +78,11 @@ export default function Home() {
           <div className={styles.emptyState}>
             <div className={styles.emptyIcon}>...</div>
             <p className={styles.emptyText}>Loading your creations...</p>
+          </div>
+        ) : error ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyIcon}>!</div>
+            <p className={styles.emptyText}>{error}</p>
           </div>
         ) : experiments.length > 0 ? (
           <div className={styles.experimentsList}>
